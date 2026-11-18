@@ -1,4 +1,5 @@
 /* גיבורי הזירה — original cartoon arena game. Kid-safe, no external assets. */
+/* v2: castle defense, big dragon, cannon */
 (function () {
   "use strict";
 
@@ -41,6 +42,33 @@
       atk: 0.85,
       splash: 0.13,
       flying: true,
+    },
+    bigDragon: {
+      id: "bigDragon",
+      name: "דרקון גדול",
+      say: "דרקון גדול!",
+      cost: 7,
+      hp: 260,
+      dmg: 28,
+      range: 0.15,
+      speed: 0.08,
+      atk: 1.05,
+      splash: 0.2,
+      flying: true,
+    },
+    cannon: {
+      id: "cannon",
+      name: "תותח",
+      say: "תותח!",
+      cost: 6,
+      hp: 110,
+      dmg: 42,
+      range: 0.28,
+      speed: 0.05,
+      atk: 1.7,
+      splash: 0,
+      flying: false,
+      projectile: "cannonball",
     },
   };
 
@@ -95,6 +123,11 @@
     enemyHp: 500,
     units: [],
     fx: [],
+    shots: [],
+    castles: {
+      player: { cd: 0, showRange: 0, flash: 0 },
+      ai: { cd: 0, showRange: 0, flash: 0 },
+    },
     t: 0,
     winner: null,
     stars: 0,
@@ -121,6 +154,8 @@
         aiFirst: 2,
         aiThink: 1.3,
         speedMul: qa ? 1.5 : 1,
+        playerCastle: { range: 0.4, dmg: 18, interval: 1.3, shotSpeed: 0.7 },
+        enemyCastle: { range: 0.4, dmg: 20, interval: 1.2, shotSpeed: 0.7 },
       };
     }
     return {
@@ -131,6 +166,8 @@
       aiFirst: 5,
       aiThink: 2.6,
       speedMul: qa ? 1.5 : 1,
+      playerCastle: { range: 0.38, dmg: 16, interval: 1.5, shotSpeed: 0.7 },
+      enemyCastle: { range: 0.34, dmg: 11, interval: 1.9, shotSpeed: 0.7 },
     };
   }
 
@@ -201,6 +238,11 @@
     state.enemyHp = d.enemyMax;
     state.units = [];
     state.fx = [];
+    state.shots = [];
+    state.castles = {
+      player: { cd: 0, showRange: 0, flash: 0 },
+      ai: { cd: 0, showRange: 0, flash: 0 },
+    };
     state.t = 0;
     state.winner = null;
     state.stars = 0;
@@ -315,6 +357,174 @@
     }
   }
 
+  function unitWorldPos(u) {
+    return { x: LANE_X[u.lane] + (u.xJitter || 0), y: u.y };
+  }
+
+  function castleWorldPos(side) {
+    return { x: 0.5, y: side === "player" ? PLAYER_CASTLE_Y : ENEMY_CASTLE_Y };
+  }
+
+  function distCastleToUnit(side, u) {
+    const c = castleWorldPos(side);
+    const p = unitWorldPos(u);
+    return Math.hypot(p.x - c.x, p.y - c.y);
+  }
+
+  function spawnShot(opts) {
+    const travel = Math.hypot(opts.tx - opts.x, opts.ty - opts.y);
+    state.shots.push({
+      x: opts.x,
+      y: opts.y,
+      tx: opts.tx,
+      ty: opts.ty,
+      travel: Math.max(travel, 0.001),
+      speed: opts.speed,
+      dmg: opts.dmg,
+      side: opts.side,
+      kind: opts.kind || "cannonball",
+      arc: opts.arc || 0,
+      target: opts.target || null,
+      targetCastle: opts.targetCastle || null,
+      fromCastle: !!opts.fromCastle,
+      life: 0,
+      maxLife: opts.maxLife || 2.2,
+      hit: false,
+    });
+  }
+
+  function fireCastleAt(side, unit) {
+    const stats = side === "player" ? state.settings.playerCastle : state.settings.enemyCastle;
+    const c = castleWorldPos(side);
+    const p = unitWorldPos(unit);
+    const dir = side === "player" ? -1 : 1;
+    const mx = c.x;
+    const my = c.y + dir * 0.05;
+    spawnShot({
+      x: mx,
+      y: my,
+      tx: p.x,
+      ty: p.y,
+      speed: stats.shotSpeed,
+      dmg: stats.dmg,
+      side,
+      kind: "cannonball",
+      arc: 0.07,
+      target: unit,
+      fromCastle: true,
+    });
+    const st = state.castles[side];
+    st.flash = 1;
+    st.cd = stats.interval;
+    spawnFx(mx, my, "muzzle");
+    beep(side === "player" ? 480 : 400, 0.07, "square", 0.035);
+  }
+
+  function fireCannonUnit(u, target) {
+    const p = unitWorldPos(u);
+    let tx;
+    let ty;
+    let targetCastle = null;
+    let liveTarget = null;
+    if (target.kind === "castle") {
+      const cp = castleWorldPos(target.side);
+      tx = cp.x;
+      ty = cp.y;
+      targetCastle = target.side;
+    } else {
+      const q = unitWorldPos(target);
+      tx = q.x;
+      ty = q.y;
+      liveTarget = target;
+    }
+    const dir = u.side === "player" ? -1 : 1;
+    spawnShot({
+      x: p.x,
+      y: p.y + dir * 0.02,
+      tx,
+      ty,
+      speed: 0.55,
+      dmg: u.dmg,
+      side: u.side,
+      kind: "cannonball",
+      arc: 0.12,
+      target: liveTarget,
+      targetCastle,
+      fromCastle: false,
+    });
+    spawnFx(p.x, p.y + dir * 0.03, "muzzle");
+    beep(200, 0.08, "triangle", 0.04);
+  }
+
+  function applyShotHit(s) {
+    spawnFx(s.x, s.y, "hit");
+    if (s.targetCastle) {
+      if (s.targetCastle === "ai" && state.enemyHp > 0) hitCastle("ai", s.dmg, { lane: 1 });
+      else if (s.targetCastle === "player" && state.playerHp > 0) hitCastle("player", s.dmg, { lane: 1 });
+      return;
+    }
+    if (s.target && s.target.hp > 0) s.target.hp -= s.dmg;
+  }
+
+  function stepCastles(dt) {
+    if (!state.settings) return;
+    for (const side of ["player", "ai"]) {
+      const st = state.castles[side];
+      if (!st) continue;
+      st.cd = Math.max(0, st.cd - dt);
+      if (st.flash > 0) st.flash = Math.max(0, st.flash - dt * 5);
+      const alive = side === "player" ? state.playerHp > 0 : state.enemyHp > 0;
+      if (!alive) {
+        st.showRange = 0;
+        continue;
+      }
+      const stats = side === "player" ? state.settings.playerCastle : state.settings.enemyCastle;
+      const enemy = side === "player" ? "ai" : "player";
+      let best = null;
+      let bestD = 1e9;
+      for (const u of state.units) {
+        if (u.side !== enemy || u.hp <= 0) continue;
+        const d0 = distCastleToUnit(side, u);
+        if (d0 <= stats.range && d0 < bestD) {
+          best = u;
+          bestD = d0;
+        }
+      }
+      if (best) {
+        st.showRange = Math.min(1, st.showRange + dt * 4);
+        if (st.cd <= 0) fireCastleAt(side, best);
+      } else {
+        st.showRange = Math.max(0, st.showRange - dt * 2);
+      }
+    }
+  }
+
+  function stepShots(dt) {
+    for (const s of state.shots) {
+      s.life += dt;
+      if (s.target && s.target.hp > 0) {
+        const p = unitWorldPos(s.target);
+        s.tx = p.x;
+        s.ty = p.y;
+      }
+      const dx = s.tx - s.x;
+      const dy = s.ty - s.y;
+      const dist = Math.hypot(dx, dy);
+      const step = s.speed * dt;
+      if (dist <= step || dist < 0.02) {
+        s.x = s.tx;
+        s.y = s.ty;
+        s.hit = true;
+        applyShotHit(s);
+      } else {
+        s.x += (dx / dist) * step;
+        s.y += (dy / dist) * step;
+      }
+      if (s.life > s.maxLife) s.hit = true;
+    }
+    state.shots = state.shots.filter((s) => !s.hit);
+  }
+
   function simulate(dt) {
     if (state.screen !== "play" || state.winner) return;
     const d = state.settings;
@@ -342,7 +552,8 @@
       if (target && (target.kind === "castle" ? Math.abs(u.y - target.y) <= CASTLE_RANGE : dist(u, target) <= u.range)) {
         u.atkCd -= dt;
         if (u.atkCd <= 0) {
-          attack(u, target);
+          if (u.type === "cannon" || u.projectile) fireCannonUnit(u, target);
+          else attack(u, target);
           u.atkCd = u.atk;
           u.swing = 1;
         }
@@ -355,6 +566,9 @@
       }
       if (u.swing > 0) u.swing = Math.max(0, u.swing - dt * 4);
     }
+
+    stepCastles(dt);
+    stepShots(dt);
 
     for (const u of state.units) {
       if (u.hp <= 0 && !u.popped) {
@@ -409,6 +623,7 @@
       atk: typ.atk,
       splash: typ.splash,
       flying: typ.flying,
+      projectile: typ.projectile || null,
       atkCd: 0.15,
       bob: Math.random() * 10,
       swing: 0,
@@ -446,7 +661,15 @@
       else if ((kinds.archer || 0) > 0 && ai.energy >= UNIT_TYPES.knight.cost) typ = UNIT_TYPES.knight;
     }
     if (!typ) {
-      const weights = affordable.map((t) => (t.id === "archer" ? 3 : t.id === "knight" ? 2 : 1));
+      const hard = state.difficulty === "hard";
+      const weights = affordable.map((t) => {
+        if (t.id === "archer") return 3;
+        if (t.id === "knight") return 2;
+        if (t.id === "dragon") return 2;
+        if (t.id === "cannon") return hard ? 1.2 : 0.55;
+        if (t.id === "bigDragon") return hard ? 1 : 0.4;
+        return 1;
+      });
       const sum = weights.reduce((a, b) => a + b, 0);
       let r = Math.random() * sum;
       typ = affordable[0];
@@ -659,6 +882,26 @@
     c.lineTo(0, -s * 0.86);
     c.closePath();
     c.fill();
+    // short barrel pointing into the field, plus muzzle flash when firing
+    const aim = side === "player" ? -1 : 1;
+    c.fillStyle = "#5a4630";
+    roundRect(c, -s * 0.07, aim < 0 ? -s * 0.2 : s * 0.2, s * 0.14, s * 0.28, 4);
+    c.fill();
+    c.fillStyle = "#2c2418";
+    c.beginPath();
+    c.arc(0, aim * s * 0.48, s * 0.08, 0, Math.PI * 2);
+    c.fill();
+    const flash = (state.castles[side] && state.castles[side].flash) || 0;
+    if (flash > 0) {
+      c.fillStyle = "rgba(255,230,90," + (0.9 * flash) + ")";
+      c.beginPath();
+      c.arc(0, aim * s * 0.58, s * 0.22 * (0.55 + 0.45 * flash), 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = "rgba(255,120,40," + (0.8 * flash) + ")";
+      c.beginPath();
+      c.arc(0, aim * s * 0.62, s * 0.12 * flash + s * 0.06, 0, Math.PI * 2);
+      c.fill();
+    }
     c.restore();
   }
 
@@ -838,6 +1081,116 @@
     c.restore();
   }
 
+  function drawBigDragon(c, s0, flip, swing, bob) {
+    const s = s0 * 1.28;
+    c.save();
+    c.scale(flip, 1);
+    const flap = Math.sin(bob * 8) * 0.32;
+    c.translate(0, Math.sin(bob * 5) * s * 0.07 - s * 0.18);
+    c.fillStyle = "rgba(40,80,30,.22)";
+    c.beginPath();
+    c.ellipse(0, s * 0.9, s * 0.48, s * 0.12, 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#e85a4a";
+    c.save();
+    c.rotate(-0.3 - flap);
+    c.beginPath();
+    c.ellipse(-s * 0.52, -s * 0.12, s * 0.5, s * 0.26, -0.3, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+    c.fillStyle = "#ff8a6a";
+    c.save();
+    c.rotate(0.3 + flap);
+    c.beginPath();
+    c.ellipse(s * 0.52, -s * 0.12, s * 0.5, s * 0.26, 0.3, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+    c.fillStyle = "#e85a4a";
+    c.beginPath();
+    c.ellipse(0, s * 0.14, s * 0.48, s * 0.34, 0, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = "#c4483a";
+    c.lineWidth = s * 0.14;
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(-s * 0.36, s * 0.24);
+    c.quadraticCurveTo(-s * 0.85, s * 0.5, -s * 0.55, s * 0.68);
+    c.stroke();
+    c.fillStyle = "#ff7a62";
+    c.beginPath();
+    c.arc(s * 0.26, -s * 0.16, s * 0.3, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#fff";
+    c.beginPath();
+    c.arc(s * 0.34, -s * 0.22, s * 0.09, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#2a2418";
+    c.beginPath();
+    c.arc(s * 0.36, -s * 0.22, s * 0.045, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#ffb3a0";
+    c.beginPath();
+    c.ellipse(s * 0.5, -s * 0.04, s * 0.14, s * 0.09, 0.2, 0, Math.PI * 2);
+    c.fill();
+    // tiny friendly horns
+    c.fillStyle = "#ffd24a";
+    c.beginPath();
+    c.moveTo(s * 0.08, -s * 0.38);
+    c.lineTo(s * 0.14, -s * 0.58);
+    c.lineTo(s * 0.2, -s * 0.36);
+    c.fill();
+    if (swing > 0.3) {
+      c.fillStyle = "rgba(255,180,60,.85)";
+      c.beginPath();
+      c.ellipse(s * 0.78, 0, s * 0.26 * swing, s * 0.14, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.restore();
+  }
+
+  function drawCannon(c, s, flip, swing, bob) {
+    const aim = flip > 0 ? -1 : 1;
+    c.save();
+    c.translate(0, Math.sin(bob * 5) * s * 0.02);
+    c.fillStyle = "rgba(40,80,30,.28)";
+    c.beginPath();
+    c.ellipse(0, s * 0.55, s * 0.46, s * 0.12, 0, 0, Math.PI * 2);
+    c.fill();
+    // wheels
+    c.fillStyle = "#8a5a2b";
+    c.beginPath();
+    c.arc(-s * 0.28, s * 0.38, s * 0.2, 0, Math.PI * 2);
+    c.arc(s * 0.28, s * 0.38, s * 0.2, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#e8d4a0";
+    c.beginPath();
+    c.arc(-s * 0.28, s * 0.38, s * 0.08, 0, Math.PI * 2);
+    c.arc(s * 0.28, s * 0.38, s * 0.08, 0, Math.PI * 2);
+    c.fill();
+    // carriage
+    c.fillStyle = "#c47a3a";
+    roundRect(c, -s * 0.32, s * 0.08, s * 0.64, s * 0.28, 6);
+    c.fill();
+    // barrel pointing at the enemy castle
+    c.save();
+    c.translate(0, s * 0.12);
+    c.fillStyle = "#4a5568";
+    roundRect(c, -s * 0.1, aim < 0 ? -s * 0.62 : 0, s * 0.2, s * 0.62, 5);
+    c.fill();
+    c.fillStyle = "#2c3340";
+    c.beginPath();
+    c.arc(0, aim * s * 0.62, s * 0.12, 0, Math.PI * 2);
+    c.fill();
+    if (swing > 0.2) {
+      c.fillStyle = "rgba(255,210,80," + (0.9 * swing) + ")";
+      c.beginPath();
+      c.arc(0, aim * s * 0.78, s * 0.28 * swing, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.restore();
+    c.restore();
+  }
+
   function drawUnit(c, u) {
     const p = toPx(LANE_X[u.lane] + u.xJitter, u.y);
     const s = unitScale();
@@ -847,14 +1200,17 @@
     if (u.hp <= 0) c.globalAlpha = Math.max(0, 1 - (u.deadT || 0) / 0.35);
     if (u.type === "knight") drawKnight(c, s, flip, u.swing, u.bob);
     else if (u.type === "archer") drawArcher(c, s, flip, u.swing, u.bob);
+    else if (u.type === "bigDragon") drawBigDragon(c, s, flip, u.swing, u.bob);
+    else if (u.type === "cannon") drawCannon(c, s, flip, u.swing, u.bob);
     else drawDragon(c, s, flip, u.swing, u.bob);
     if (u.hp > 0 && u.hp < u.maxHp) {
-      const bw = s * 0.8;
+      const bw = s * (u.type === "bigDragon" ? 1 : 0.8);
+      const barY = u.type === "bigDragon" ? -s * 1.35 : -s * 1.05;
       c.fillStyle = "rgba(0,0,0,.35)";
-      roundRect(c, -bw / 2, -s * 1.05, bw, s * 0.12, 4);
+      roundRect(c, -bw / 2, barY, bw, s * 0.12, 4);
       c.fill();
       c.fillStyle = u.side === "player" ? "#4aa3ff" : "#ff6a3d";
-      roundRect(c, -bw / 2, -s * 1.05, bw * (u.hp / u.maxHp), s * 0.12, 4);
+      roundRect(c, -bw / 2, barY, bw * (u.hp / u.maxHp), s * 0.12, 4);
       c.fill();
     }
     c.restore();
@@ -905,12 +1261,84 @@
         c.beginPath();
         c.arc(0, 0, unitScale() * 0.4 * (1.2 - a), 0, Math.PI * 2);
         c.fill();
+      } else if (f.kind === "muzzle") {
+        c.fillStyle = "#ffe27a";
+        c.beginPath();
+        c.arc(0, 0, unitScale() * 0.38 * (1.15 - a), 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = "#ff8a3a";
+        c.beginPath();
+        c.arc(0, 0, unitScale() * 0.18 * (1.15 - a), 0, Math.PI * 2);
+        c.fill();
       } else {
         c.fillStyle = "#ffe27a";
         c.beginPath();
         c.arc(0, 0, unitScale() * 0.25 * (1.4 - a), 0, Math.PI * 2);
         c.fill();
       }
+      c.restore();
+    }
+  }
+
+  function worldScale() {
+    const a = toPx(0, 0);
+    const b = toPx(1, 1);
+    return { x: b.x - a.x, y: b.y - a.y };
+  }
+
+  function drawCastleRanges(c) {
+    if (!state.settings) return;
+    const sc = worldScale();
+    for (const side of ["player", "ai"]) {
+      const st = state.castles[side];
+      if (!st || st.showRange <= 0) continue;
+      const stats = side === "player" ? state.settings.playerCastle : state.settings.enemyCastle;
+      const p = toPx(0.5, side === "player" ? PLAYER_CASTLE_Y : ENEMY_CASTLE_Y);
+      const a = 0.16 * st.showRange;
+      c.save();
+      c.beginPath();
+      c.ellipse(p.x, p.y, stats.range * sc.x, stats.range * sc.y, 0, 0, Math.PI * 2);
+      c.fillStyle = side === "player" ? "rgba(61,124,255," + a + ")" : "rgba(255,106,61," + a + ")";
+      c.fill();
+      c.strokeStyle = side === "player" ? "rgba(61,124,255," + (a * 2) + ")" : "rgba(255,106,61," + (a * 2) + ")";
+      c.lineWidth = 2;
+      c.setLineDash([8, 8]);
+      c.stroke();
+      c.restore();
+    }
+  }
+
+  function shotVisual(s) {
+    const remain = Math.hypot(s.tx - s.x, s.ty - s.y);
+    const total = Math.max(s.travel || remain, 0.001);
+    const prog = Math.max(0, Math.min(1, 1 - remain / total));
+    return { x: s.x, y: s.y - Math.sin(prog * Math.PI) * (s.arc || 0) };
+  }
+
+  function drawShots(c) {
+    const sc = unitScale();
+    for (const s of state.shots) {
+      const v = shotVisual(s);
+      const p = toPx(v.x, v.y);
+      const glow = s.fromCastle
+        ? (s.side === "player" ? "#7eb0ff" : "#ffb08a")
+        : "#c9a06a";
+      c.save();
+      c.translate(p.x, p.y);
+      c.fillStyle = glow;
+      c.globalAlpha = 0.55;
+      c.beginPath();
+      c.arc(0, 0, sc * 0.22, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1;
+      c.fillStyle = "#2a1c14";
+      c.beginPath();
+      c.arc(0, 0, sc * 0.16, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = "#d8c2a0";
+      c.beginPath();
+      c.arc(-sc * 0.05, -sc * 0.05, sc * 0.06, 0, Math.PI * 2);
+      c.fill();
       c.restore();
     }
   }
@@ -933,9 +1361,11 @@
     drawPaths(c);
     drawCastle(c, "ai");
     drawCastle(c, "player");
+    drawCastleRanges(c);
     drawLaneHints(c);
     const list = state.units.slice().sort((a, b) => a.y - b.y || (a.flying ? 1 : 0) - (b.flying ? 1 : 0));
     for (const u of list) drawUnit(c, u);
+    drawShots(c);
     drawFx(c);
     c.restore();
   }
@@ -1052,6 +1482,8 @@
     if (e.key === "1") selectUnit("knight");
     else if (e.key === "2") selectUnit("archer");
     else if (e.key === "3") selectUnit("dragon");
+    else if (e.key === "4") selectUnit("bigDragon");
+    else if (e.key === "5") selectUnit("cannon");
     else if (e.key === "q" || e.key === "a" || e.key === "ArrowLeft") {
       if (state.selected) deploy("player", state.selected, 0);
     } else if (e.key === "w" || e.key === "s" || e.key === "ArrowUp" || e.key === "ArrowDown") {
@@ -1093,6 +1525,17 @@
       winner: state.winner,
       stars: state.stars,
       aiEnergy: state.ai.energy,
+      shots: state.shots.map((s) => ({
+        x: s.x,
+        y: s.y,
+        side: s.side,
+        fromCastle: !!s.fromCastle,
+        kind: s.kind,
+      })),
+      castle: {
+        player: { ...(state.settings && state.settings.playerCastle), cd: state.castles.player.cd, showRange: state.castles.player.showRange },
+        ai: { ...(state.settings && state.settings.enemyCastle), cd: state.castles.ai.cd, showRange: state.castles.ai.showRange },
+      },
     };
   }
 
@@ -1134,5 +1577,14 @@
     },
     tick,
     types: UNIT_TYPES,
+    place: (type, lane, y, side) => {
+      const who = side || "player";
+      const ok = deploy(who, type, lane);
+      if (ok && typeof y === "number") {
+        const u = state.units[state.units.length - 1];
+        u.y = y;
+      }
+      return ok;
+    },
   };
 })();

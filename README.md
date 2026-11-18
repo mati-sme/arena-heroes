@@ -8,11 +8,12 @@ Play: https://mati-sme.github.io/arena-heroes/
 
 1. Open the page on a tablet or computer.
 2. Tap **קל** (easy) or **קשה** (hard).
-3. Tap a hero at the bottom: **אביר** (tanky melee), **קשת** (ranged), or **דרקון קטן** (flying splash).
+3. Tap a hero at the bottom: **אביר** (tanky melee), **קשת** (ranged), **דרקון קטן** (flying splash), **דרקון גדול** (tanky flyer), or **תותח** (slow, long-range cannon).
 4. Tap a path on the field to send them. They walk and fight on their own.
 5. Energy refills slowly. You need enough energy to send a hero.
-6. A round lasts about two and a half minutes. If time runs out, the castle with more health wins.
-7. On the end screen, tap **עוד פעם** to play again.
+6. Each castle also shoots a cannonball at the nearest enemy hero that comes close. Castles do not shoot each other.
+7. A round lasts about two and a half minutes. If time runs out, the castle with more health wins.
+8. On the end screen, tap **עוד פעם** to play again.
 
 The game is fully in Hebrew, right-to-left, with large buttons and very little text. If the device has a Hebrew voice, it says short cues (the names, “well done”, “try again”). If not, it stays quiet. No ads, no accounts, no external links. Works offline after the first visit.
 
@@ -34,7 +35,7 @@ Open `http://localhost:8080`.
 - `index.html` — screens (home, play, win/lose)
 - `style.css` — cartoon UI, RTL, tablet-first
 - `js/game.js` — simulation, drawing, input, speech, AI
-- `sw.js` — offline cache (`arena-heroes-v1`)
+- `sw.js` — offline cache (`arena-heroes-v2`)
 
 ## License
 
