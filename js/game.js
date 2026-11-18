@@ -1,5 +1,5 @@
 /* גיבורי הזירה — original cartoon arena game. Kid-safe, no external assets. */
-/* v3: castle defense, big dragon, cannon, home guards */
+/* v4: castle defense, big dragon, cannon, home guards, fences */
 (function () {
   "use strict";
 
@@ -89,6 +89,8 @@
     { side: "ai", slot: 0, x: 0.33, y: 0.165, lane: 0 },
     { side: "ai", slot: 1, x: 0.67, y: 0.165, lane: 2 },
   ];
+  const FENCE_Y = { player: 0.8, ai: 0.2 };
+  const FENCE_STANDOFF = 0.05;
 
   const qa = /(?:\?|&)qa=1(?:&|$)/.test(location.search);
 
@@ -147,6 +149,7 @@
     shake: 0,
     lastLane: 1,
     guardTimers: {},
+    fences: [],
   };
 
   let audioCtx = null;
@@ -165,6 +168,8 @@
         enemyCastle: { range: 0.4, dmg: 20, interval: 1.2, shotSpeed: 0.7 },
         playerGuard: { hp: 100, dmg: 14, range: 0.11, speed: 0.09, atk: 0.8, leash: 0.15, defendRange: 0.3, respawn: 15 },
         enemyGuard: { hp: 100, dmg: 14, range: 0.11, speed: 0.09, atk: 0.8, leash: 0.15, defendRange: 0.3, respawn: 15 },
+        playerFence: { hp: 160, rebuild: 25 },
+        enemyFence: { hp: 160, rebuild: 25 },
       };
     }
     return {
@@ -179,6 +184,8 @@
       enemyCastle: { range: 0.34, dmg: 11, interval: 1.9, shotSpeed: 0.7 },
       playerGuard: { hp: 90, dmg: 12, range: 0.11, speed: 0.09, atk: 0.85, leash: 0.15, defendRange: 0.28, respawn: 15 },
       enemyGuard: { hp: 50, dmg: 7, range: 0.1, speed: 0.08, atk: 1.1, leash: 0.14, defendRange: 0.24, respawn: 16 },
+      playerFence: { hp: 140, rebuild: 25 },
+      enemyFence: { hp: 70, rebuild: 25 },
     };
   }
 
@@ -264,6 +271,7 @@
     state.lastLane = 1;
     state.guardTimers = {};
     state.settings = d;
+    initFences();
     for (const post of GUARD_POSTS) spawnGuard(post);
     updateUnitButtons();
     updateHud();
@@ -321,6 +329,68 @@
     return Math.hypot(dx, dy);
   }
 
+  function initFences() {
+    state.fences = [];
+    for (const side of ["player", "ai"]) {
+      const stats = side === "player" ? state.settings.playerFence : state.settings.enemyFence;
+      for (let lane = 0; lane < 3; lane++) {
+        state.fences.push({
+          id: side + "-" + lane,
+          side,
+          lane,
+          x: LANE_X[lane],
+          y: FENCE_Y[side],
+          hp: stats.hp,
+          maxHp: stats.hp,
+          rebuild: 0,
+        });
+      }
+    }
+  }
+
+  function intactEnemyFence(lane, unitSide) {
+    const enemy = unitSide === "player" ? "ai" : "player";
+    return state.fences.find((f) => f.side === enemy && f.lane === lane && f.hp > 0) || null;
+  }
+
+  function unitBehindFence(attacker, other, fence) {
+    const oy = other.wy != null ? other.wy : other.y;
+    if (attacker.side === "player") return oy < fence.y - 0.01;
+    return oy > fence.y + 0.01;
+  }
+
+  function fenceStopY(u, fence) {
+    const gap = FENCE_STANDOFF;
+    return u.side === "player" ? fence.y + gap : fence.y - gap;
+  }
+
+  function hitFence(f, dmg) {
+    if (!f || f.hp <= 0) return;
+    f.hp = Math.max(0, f.hp - dmg);
+    spawnFx(f.x, f.y, "hit");
+    if (f.hp <= 0) {
+      const stats = f.side === "player" ? state.settings.playerFence : state.settings.enemyFence;
+      f.rebuild = stats.rebuild;
+      spawnFx(f.x, f.y, "pop");
+      beep(160, 0.1, "square", 0.035);
+    }
+  }
+
+  function stepFences(dt) {
+    if (!state.settings) return;
+    for (const f of state.fences) {
+      if (f.hp > 0) continue;
+      f.rebuild -= dt;
+      if (f.rebuild <= 0) {
+        const stats = f.side === "player" ? state.settings.playerFence : state.settings.enemyFence;
+        f.hp = stats.hp;
+        f.maxHp = stats.hp;
+        f.rebuild = 0;
+        spawnFx(f.x, f.y, "spark");
+      }
+    }
+  }
+
   function worldDist(a, b) {
     const pa = unitWorldPos(a);
     const pb = unitWorldPos(b);
@@ -349,11 +419,13 @@
 
   function findTarget(u) {
     if (u.guard) return findGuardTarget(u);
+    const fence = !u.flying ? intactEnemyFence(u.lane, u.side) : null;
     let best = null;
     let bestD = 1e9;
     for (const o of state.units) {
       if (o.side === u.side || o.hp <= 0) continue;
       if (!u.splash && o.lane !== u.lane && !o.guard) continue;
+      if (fence && unitBehindFence(u, o, fence)) continue;
       const d = reach(u, o);
       const aggro = u.range + (u.splash || 0) + 0.04;
       if (d < aggro && d < bestD) {
@@ -362,6 +434,10 @@
       }
     }
     if (best) return best;
+    if (fence && Math.abs(u.y - fence.y) <= u.range + FENCE_STANDOFF + 0.02) {
+      return { kind: "fence", fence, x: fence.x, y: fence.y, lane: fence.lane, side: fence.side };
+    }
+    if (fence) return null;
     const castleY = u.side === "player" ? ENEMY_CASTLE_Y : PLAYER_CASTLE_Y;
     const toCastle = Math.abs(u.y - castleY);
     if (toCastle <= CASTLE_RANGE + u.range * 0.25) {
@@ -385,6 +461,10 @@
   function attack(u, target) {
     if (target.kind === "castle") {
       hitCastle(target.side, u.dmg, u);
+      return;
+    }
+    if (target.kind === "fence") {
+      hitFence(target.fence || target, u.dmg);
       return;
     }
     target.hp -= u.dmg;
@@ -427,6 +507,7 @@
       arc: opts.arc || 0,
       target: opts.target || null,
       targetCastle: opts.targetCastle || null,
+      targetFence: opts.targetFence || null,
       fromCastle: !!opts.fromCastle,
       life: 0,
       maxLife: opts.maxLife || 2.2,
@@ -467,11 +548,17 @@
     let ty;
     let targetCastle = null;
     let liveTarget = null;
+    let targetFence = null;
     if (target.kind === "castle") {
       const cp = castleWorldPos(target.side);
       tx = cp.x;
       ty = cp.y;
       targetCastle = target.side;
+    } else if (target.kind === "fence") {
+      const f = target.fence || target;
+      tx = f.x;
+      ty = f.y;
+      targetFence = f;
     } else {
       const q = unitWorldPos(target);
       tx = q.x;
@@ -491,6 +578,7 @@
       arc: 0.12,
       target: liveTarget,
       targetCastle,
+      targetFence,
       fromCastle: false,
     });
     spawnFx(p.x, p.y + dir * 0.03, "muzzle");
@@ -502,6 +590,10 @@
     if (s.targetCastle) {
       if (s.targetCastle === "ai" && state.enemyHp > 0) hitCastle("ai", s.dmg, { lane: 1 });
       else if (s.targetCastle === "player" && state.playerHp > 0) hitCastle("player", s.dmg, { lane: 1 });
+      return;
+    }
+    if (s.targetFence && s.targetFence.hp > 0) {
+      hitFence(s.targetFence, s.dmg);
       return;
     }
     if (s.target && s.target.hp > 0) s.target.hp -= s.dmg;
@@ -593,8 +685,19 @@
       }
       u.bob += dt;
       const target = findTarget(u);
-      const hitD = target && target.kind !== "castle" ? reach(u, target) : 0;
-      if (target && (target.kind === "castle" ? Math.abs(u.y - target.y) <= CASTLE_RANGE : hitD <= u.range)) {
+      const hitD = target && target.kind === "castle"
+        ? Math.abs(u.y - target.y)
+        : target && target.kind === "fence"
+        ? Math.abs(u.y - target.y)
+        : target
+        ? reach(u, target)
+        : 0;
+      const inHit = target && (
+        target.kind === "castle" ? Math.abs(u.y - target.y) <= CASTLE_RANGE
+        : target.kind === "fence" ? Math.abs(u.y - target.y) <= u.range + FENCE_STANDOFF
+        : hitD <= u.range
+      );
+      if (inHit) {
         u.atkCd -= dt;
         if (u.atkCd <= 0) {
           if (u.type === "cannon" || u.projectile) fireCannonUnit(u, target);
@@ -605,9 +708,15 @@
       } else {
         const dir = u.side === "player" ? -1 : 1;
         const cap = u.side === "player" ? ENEMY_CASTLE_Y : PLAYER_CASTLE_Y;
-        u.y += dir * u.speed * d.speedMul * dt;
-        if (dir < 0) u.y = Math.max(cap, u.y);
-        else u.y = Math.min(cap, u.y);
+        let next = u.y + dir * u.speed * d.speedMul * dt;
+        const fence = !u.flying ? intactEnemyFence(u.lane, u.side) : null;
+        if (fence) {
+          const stop = fenceStopY(u, fence);
+          if (dir < 0) next = Math.max(next, stop);
+          else next = Math.min(next, stop);
+        }
+        if (dir < 0) u.y = Math.max(cap, next);
+        else u.y = Math.min(cap, next);
       }
       if (u.swing > 0) u.swing = Math.max(0, u.swing - dt * 4);
     }
@@ -615,6 +724,7 @@
     stepCastles(dt);
     stepShots(dt);
     stepGuardRespawns(dt);
+    stepFences(dt);
 
     for (const u of state.units) {
       if (u.hp <= 0 && !u.popped) {
@@ -1548,6 +1658,77 @@
     }
   }
 
+  function drawFences(c) {
+    const s = unitScale();
+    for (const f of state.fences) {
+      const p = toPx(f.x, f.y);
+      const w = s * 1.55;
+      const h = s * 0.7;
+      const broken = f.hp <= 0;
+      const ratio = f.maxHp ? f.hp / f.maxHp : 0;
+      c.save();
+      c.translate(p.x, p.y);
+      if (broken) c.globalAlpha = 0.55;
+      // shadow
+      c.fillStyle = "rgba(40,80,30,.22)";
+      c.beginPath();
+      c.ellipse(0, h * 0.45, w * 0.55, s * 0.1, 0, 0, Math.PI * 2);
+      c.fill();
+      const postH = broken ? h * 0.45 : h;
+      const postW = s * 0.14;
+      c.fillStyle = "#8a5a2b";
+      roundRect(c, -w / 2, -postH * 0.7, postW, postH, 3);
+      c.fill();
+      roundRect(c, w / 2 - postW, -postH * 0.7, postW, postH, 3);
+      c.fill();
+      c.fillStyle = "#c47a3a";
+      if (!broken) {
+        for (let i = 0; i < 3; i++) {
+          const ry = -h * 0.52 + i * (h * 0.28);
+          roundRect(c, -w / 2 + postW * 0.3, ry, w - postW * 0.6, s * 0.11, 2);
+          c.fill();
+        }
+      } else {
+        // fallen rail
+        c.save();
+        c.translate(0, h * 0.05);
+        c.rotate(-0.35);
+        roundRect(c, -w * 0.35, 0, w * 0.6, s * 0.1, 2);
+        c.fill();
+        c.restore();
+      }
+      if (!broken && ratio < 0.99) {
+        c.strokeStyle = "rgba(50,30,15,.75)";
+        c.lineWidth = 2;
+        c.beginPath();
+        if (ratio < 0.85) {
+          c.moveTo(-w * 0.25, -h * 0.35);
+          c.lineTo(-w * 0.05, -h * 0.05);
+          c.lineTo(-w * 0.2, h * 0.15);
+        }
+        if (ratio < 0.55) {
+          c.moveTo(w * 0.08, -h * 0.4);
+          c.lineTo(w * 0.22, -h * 0.1);
+          c.lineTo(w * 0.1, h * 0.18);
+        }
+        if (ratio < 0.3) {
+          c.moveTo(-w * 0.1, -h * 0.5);
+          c.lineTo(w * 0.05, -h * 0.2);
+        }
+        c.stroke();
+        const bw = w * 0.7;
+        const barY = -h * 0.95;
+        c.fillStyle = "rgba(0,0,0,.35)";
+        roundRect(c, -bw / 2, barY, bw, s * 0.1, 3);
+        c.fill();
+        c.fillStyle = ratio > 0.45 ? "#e8c15a" : "#ff6a3d";
+        roundRect(c, -bw / 2, barY, bw * ratio, s * 0.1, 3);
+        c.fill();
+      }
+      c.restore();
+    }
+  }
+
   function render() {
     if (state.screen !== "play") return;
     resize();
@@ -1566,6 +1747,7 @@
     drawPaths(c);
     drawCastle(c, "ai");
     drawCastle(c, "player");
+    drawFences(c);
     drawCastleRanges(c);
     drawLaneHints(c);
     const list = state.units.slice().sort((a, b) => a.y - b.y || (a.flying ? 1 : 0) - (b.flying ? 1 : 0));
@@ -1732,6 +1914,16 @@
         swing: u.swing || 0,
       })),
       guardTimers: { ...state.guardTimers },
+      fences: state.fences.map((f) => ({
+        id: f.id,
+        side: f.side,
+        lane: f.lane,
+        x: f.x,
+        y: f.y,
+        hp: f.hp,
+        maxHp: f.maxHp,
+        rebuild: f.rebuild,
+      })),
       winner: state.winner,
       stars: state.stars,
       aiEnergy: state.ai.energy,

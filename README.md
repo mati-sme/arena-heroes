@@ -13,8 +13,9 @@ Play: https://mati-sme.github.io/arena-heroes/
 5. Energy refills slowly. You need enough energy to send a hero.
 6. Each castle also shoots a cannonball at the nearest enemy hero that comes close. Castles do not shoot each other.
 7. Two small guards (**שומרי הטירה**) stand beside each castle, fight enemies that come near, and come back after about 15 seconds if they fall. They are free and automatic.
-8. A round lasts about two and a half minutes. If time runs out, the castle with more health wins.
-9. On the end screen, tap **עוד פעם** to play again.
+8. A wooden fence (**גדר**) stands on each path in front of the castle. Ground heroes have to break an enemy fence before they can pass; dragons fly over; your own fences let your heroes through. A broken fence comes back after about 25 seconds.
+9. A round lasts about two and a half minutes. If time runs out, the castle with more health wins.
+10. On the end screen, tap **עוד פעם** to play again.
 
 The game is fully in Hebrew, right-to-left, with large buttons and very little text. If the device has a Hebrew voice, it says short cues (the names, “well done”, “try again”). If not, it stays quiet. No ads, no accounts, no external links. Works offline after the first visit.
 
@@ -36,7 +37,7 @@ Open `http://localhost:8080`.
 - `index.html` — screens (home, play, win/lose)
 - `style.css` — cartoon UI, RTL, tablet-first
 - `js/game.js` — simulation, drawing, input, speech, AI
-- `sw.js` — offline cache (`arena-heroes-v3`)
+- `sw.js` — offline cache (`arena-heroes-v4`)
 
 ## License
 
