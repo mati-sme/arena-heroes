@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#4aa3ff">
+<meta name="description" content="גיבורי הזירה — משחק זירה פשוט וצבעוני לילדים">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="גיבורי הזירה">
+<meta name="format-detection" content="telephone=no">
+<title>גיבורי הזירה</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <section id="screen-home" class="screen" data-testid="screen-home">
+    <button id="btn-mute" class="icon-btn" type="button" aria-label="קול" data-testid="mute" title="קול">🔊</button>
+    <div class="home-art" aria-hidden="true">
+      <svg viewBox="0 0 360 170" class="heroes-svg">
+        <ellipse cx="180" cy="158" rx="150" ry="10" fill="rgba(40,80,30,.18)"/>
+        <!-- knight -->
+        <g transform="translate(55,20)">
+          <ellipse cx="50" cy="132" rx="28" ry="8" fill="rgba(40,80,30,.25)"/>
+          <rect x="34" y="70" width="32" height="44" rx="10" fill="#5b8cff"/>
+          <rect x="30" y="66" width="40" height="18" rx="6" fill="#3d6ef0"/>
+          <circle cx="50" cy="52" r="20" fill="#f8d7b0"/>
+          <path d="M30 48 Q50 20 70 48" fill="#7a8ca8"/>
+          <rect x="38" y="50" width="24" height="8" rx="3" fill="#2c3548"/>
+          <rect x="18" y="78" width="16" height="28" rx="5" fill="#c9d4e8"/>
+          <rect x="72" y="62" width="8" height="46" rx="3" fill="#ffd24a"/>
+          <circle cx="76" cy="60" r="7" fill="#ffef9a"/>
+        </g>
+        <!-- archer -->
+        <g transform="translate(150,16)">
+          <ellipse cx="40" cy="136" rx="26" ry="8" fill="rgba(40,80,30,.25)"/>
+          <rect x="26" y="78" width="28" height="42" rx="10" fill="#3cbf6a"/>
+          <circle cx="40" cy="58" r="18" fill="#f3c79a"/>
+          <path d="M22 58 Q40 28 58 58 L58 70 Q40 78 22 70 Z" fill="#2e8a4a"/>
+          <circle cx="34" cy="58" r="2.4" fill="#2a2418"/>
+          <circle cx="46" cy="58" r="2.4" fill="#2a2418"/>
+          <path d="M32 66 Q40 70 48 66" fill="none" stroke="#c86a5a" stroke-width="2" stroke-linecap="round"/>
+          <path d="M8 50 Q0 80 12 112" fill="none" stroke="#8a5a2b" stroke-width="5" stroke-linecap="round"/>
+          <path d="M8 50 L12 112" fill="none" stroke="#e8d8a8" stroke-width="1.5"/>
+        </g>
+        <!-- dragon -->
+        <g transform="translate(240,8)">
+          <ellipse cx="48" cy="144" rx="30" ry="9" fill="rgba(40,80,30,.25)"/>
+          <ellipse cx="22" cy="70" rx="22" ry="16" fill="#7b5cff"/>
+          <ellipse cx="78" cy="70" rx="22" ry="16" fill="#9a7dff"/>
+          <ellipse cx="48" cy="88" rx="28" ry="22" fill="#8a6aff"/>
+          <circle cx="62" cy="70" r="16" fill="#9d80ff"/>
+          <circle cx="68" cy="66" r="4" fill="#fff"/>
+          <circle cx="69" cy="66" r="2" fill="#2a2418"/>
+          <ellipse cx="80" cy="74" rx="8" ry="5" fill="#ff9ec8"/>
+          <path d="M20 92 Q8 110 28 108" fill="#6c4ee0"/>
+          <path d="M70 108 Q90 120 78 96" fill="#6c4ee0"/>
+        </g>
+      </svg>
+    </div>
+    <h1>גיבורי הזירה</h1>
+    <div class="home-actions">
+      <button id="btn-easy" class="btn big primary" type="button" data-testid="easy">קל</button>
+      <button id="btn-hard" class="btn big alt" type="button" data-testid="hard">קשה</button>
+    </div>
+  </section>
+
+  <section id="screen-play" class="screen play hidden" data-testid="screen-play">
+    <header class="hud-top">
+      <div class="hp-block enemy">
+        <span class="hp-heart" aria-hidden="true">❤</span>
+        <div class="hp-track" aria-hidden="true"><div id="hp-enemy-fill" class="hp-fill"></div></div>
+        <b id="hp-enemy-txt">0</b>
+      </div>
+      <div id="timer" class="timer" data-testid="timer">2:30</div>
+      <div class="hp-block player">
+        <span class="hp-heart" aria-hidden="true">❤</span>
+        <div class="hp-track" aria-hidden="true"><div id="hp-player-fill" class="hp-fill"></div></div>
+        <b id="hp-player-txt">0</b>
+      </div>
+    </header>
+    <div id="arena-wrap">
+      <canvas id="arena" data-testid="arena"></canvas>
+    </div>
+    <footer class="hud-bottom">
+      <div class="energy" title="אנרגיה">
+        <div id="energy-pips" class="energy-pips" aria-hidden="true"></div>
+        <b id="energy-txt" data-testid="energy">0</b>
+      </div>
+      <div class="unit-row" role="list">
+        <button type="button" class="unit-btn" data-unit="knight" data-testid="unit-knight" aria-label="אביר">
+          <span class="unit-art" aria-hidden="true">🛡️</span>
+          <span class="unit-name">אביר</span>
+          <span class="unit-cost" data-cost="4">4</span>
+        </button>
+        <button type="button" class="unit-btn" data-unit="archer" data-testid="unit-archer" aria-label="קשת">
+          <span class="unit-art" aria-hidden="true">🏹</span>
+          <span class="unit-name">קשת</span>
+          <span class="unit-cost" data-cost="3">3</span>
+        </button>
+        <button type="button" class="unit-btn" data-unit="dragon" data-testid="unit-dragon" aria-label="דרקון קטן">
+          <span class="unit-art" aria-hidden="true">🐉</span>
+          <span class="unit-name">דרקון</span>
+          <span class="unit-cost" data-cost="5">5</span>
+        </button>
+      </div>
+    </footer>
+  </section>
+
+  <section id="screen-end" class="screen end hidden" data-testid="screen-end">
+    <div id="stars" class="stars" aria-hidden="true">
+      <span class="star" data-i="0">★</span>
+      <span class="star" data-i="1">★</span>
+      <span class="star" data-i="2">★</span>
+    </div>
+    <h1 id="end-title" data-testid="end-title">כל הכבוד</h1>
+    <p id="end-sub" class="end-sub"></p>
+    <div class="home-actions">
+      <button id="btn-again" class="btn big primary" type="button" data-testid="again">עוד פעם</button>
+      <button id="btn-home" class="btn big ghost" type="button" data-testid="home">חזרה</button>
+    </div>
+  </section>
+
+</div>
+<script src="js/game.js"></script>
+</body>
+</html>
