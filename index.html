@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#4aa3ff">
+<meta name="theme-color" content="#3a8aef">
 <meta name="description" content="גיבורי הזירה — משחק זירה פשוט וצבעוני לילדים">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -20,48 +20,82 @@
   <section id="screen-home" class="screen" data-testid="screen-home">
     <button id="btn-mute" class="icon-btn" type="button" aria-label="קול" data-testid="mute" title="קול">🔊</button>
     <div class="home-art" aria-hidden="true">
-      <svg viewBox="0 0 360 170" class="heroes-svg">
-        <ellipse cx="180" cy="158" rx="150" ry="10" fill="rgba(40,80,30,.18)"/>
+      <svg viewBox="0 0 400 200" class="heroes-svg">
+        <defs>
+          <linearGradient id="skyh" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#7ec8ff"/><stop offset="1" stop-color="#d6f0ff"/>
+          </linearGradient>
+          <radialGradient id="sunh" cx="0.18" cy="0.15" r="0.4">
+            <stop offset="0" stop-color="#fff6c8" stop-opacity=".95"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="logog" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff8d0"/><stop offset="1" stop-color="#ffd24a"/>
+          </linearGradient>
+        </defs>
+        <rect width="400" height="200" fill="url(#skyh)" rx="24"/>
+        <circle cx="70" cy="30" r="90" fill="url(#sunh)"/>
+        <ellipse cx="200" cy="188" rx="170" ry="14" fill="rgba(40,90,30,.22)"/>
+        <!-- crest -->
+        <g transform="translate(168,8)">
+          <path d="M32 4 L56 16 L56 36 Q32 54 8 36 L8 16 Z" fill="url(#logog)" stroke="#c9a227" stroke-width="2"/>
+          <path d="M32 14 L40 34 L32 28 L24 34 Z" fill="#b8f0ff" stroke="#fff" stroke-width="1.2" opacity=".95"/>
+        </g>
         <!-- knight -->
-        <g transform="translate(55,20)">
-          <ellipse cx="50" cy="132" rx="28" ry="8" fill="rgba(40,80,30,.25)"/>
-          <rect x="34" y="70" width="32" height="44" rx="10" fill="#5b8cff"/>
-          <rect x="30" y="66" width="40" height="18" rx="6" fill="#3d6ef0"/>
-          <circle cx="50" cy="52" r="20" fill="#f8d7b0"/>
-          <path d="M30 48 Q50 20 70 48" fill="#7a8ca8"/>
-          <rect x="38" y="50" width="24" height="8" rx="3" fill="#2c3548"/>
-          <rect x="18" y="78" width="16" height="28" rx="5" fill="#c9d4e8"/>
-          <rect x="72" y="62" width="8" height="46" rx="3" fill="#ffd24a"/>
-          <circle cx="76" cy="60" r="7" fill="#ffef9a"/>
+        <g transform="translate(18,48)">
+          <ellipse cx="40" cy="126" rx="26" ry="8" fill="rgba(40,80,30,.25)"/>
+          <rect x="26" y="72" width="28" height="40" rx="8" fill="#4f7cff"/>
+          <rect x="22" y="68" width="36" height="16" rx="5" fill="#2f5de0"/>
+          <circle cx="40" cy="54" r="16" fill="#f3c79a"/>
+          <path d="M24 50 Q40 28 56 50" fill="#8a9bb8"/>
+          <rect x="30" y="52" width="20" height="6" rx="2" fill="#2c3548"/>
+          <rect x="8" y="78" width="16" height="26" rx="4" fill="#dce6f8"/>
+          <rect x="60" y="66" width="7" height="42" rx="2" fill="#ffd24a"/>
         </g>
         <!-- archer -->
-        <g transform="translate(150,16)">
-          <ellipse cx="40" cy="136" rx="26" ry="8" fill="rgba(40,80,30,.25)"/>
-          <rect x="26" y="78" width="28" height="42" rx="10" fill="#3cbf6a"/>
-          <circle cx="40" cy="58" r="18" fill="#f3c79a"/>
-          <path d="M22 58 Q40 28 58 58 L58 70 Q40 78 22 70 Z" fill="#2e8a4a"/>
-          <circle cx="34" cy="58" r="2.4" fill="#2a2418"/>
-          <circle cx="46" cy="58" r="2.4" fill="#2a2418"/>
-          <path d="M32 66 Q40 70 48 66" fill="none" stroke="#c86a5a" stroke-width="2" stroke-linecap="round"/>
-          <path d="M8 50 Q0 80 12 112" fill="none" stroke="#8a5a2b" stroke-width="5" stroke-linecap="round"/>
-          <path d="M8 50 L12 112" fill="none" stroke="#e8d8a8" stroke-width="1.5"/>
+        <g transform="translate(88,52)">
+          <ellipse cx="36" cy="122" rx="22" ry="7" fill="rgba(40,80,30,.25)"/>
+          <rect x="22" y="76" width="26" height="36" rx="8" fill="#3cbf6a"/>
+          <circle cx="35" cy="56" r="14" fill="#f3c79a"/>
+          <path d="M20 56 Q35 30 50 56 L50 66 Q35 74 20 66 Z" fill="#2e8a4a"/>
+          <path d="M6 50 Q0 78 10 108" fill="none" stroke="#8a5a2b" stroke-width="4" stroke-linecap="round"/>
         </g>
-        <!-- dragon -->
-        <g transform="translate(240,8)">
-          <ellipse cx="48" cy="144" rx="30" ry="9" fill="rgba(40,80,30,.25)"/>
-          <ellipse cx="22" cy="70" rx="22" ry="16" fill="#7b5cff"/>
-          <ellipse cx="78" cy="70" rx="22" ry="16" fill="#9a7dff"/>
-          <ellipse cx="48" cy="88" rx="28" ry="22" fill="#8a6aff"/>
-          <circle cx="62" cy="70" r="16" fill="#9d80ff"/>
-          <circle cx="68" cy="66" r="4" fill="#fff"/>
-          <circle cx="69" cy="66" r="2" fill="#2a2418"/>
-          <ellipse cx="80" cy="74" rx="8" ry="5" fill="#ff9ec8"/>
-          <path d="M20 92 Q8 110 28 108" fill="#6c4ee0"/>
-          <path d="M70 108 Q90 120 78 96" fill="#6c4ee0"/>
+        <!-- small dragon -->
+        <g transform="translate(148,40)">
+          <ellipse cx="40" cy="132" rx="24" ry="8" fill="rgba(40,80,30,.22)"/>
+          <ellipse cx="16" cy="70" rx="18" ry="13" fill="#7b5cff"/>
+          <ellipse cx="62" cy="70" rx="18" ry="13" fill="#9a7dff"/>
+          <ellipse cx="40" cy="86" rx="22" ry="18" fill="#8a6aff"/>
+          <circle cx="54" cy="70" r="13" fill="#9d80ff"/>
+          <circle cx="58" cy="66" r="3.2" fill="#fff"/><circle cx="59" cy="66" r="1.6" fill="#2a2418"/>
+        </g>
+        <!-- big dragon -->
+        <g transform="translate(230,28)">
+          <ellipse cx="48" cy="144" rx="30" ry="9" fill="rgba(40,80,30,.22)"/>
+          <ellipse cx="18" cy="72" rx="22" ry="16" fill="#e85a4a"/>
+          <ellipse cx="76" cy="72" rx="22" ry="16" fill="#ff8a6a"/>
+          <ellipse cx="48" cy="92" rx="28" ry="22" fill="#e85a4a"/>
+          <circle cx="64" cy="72" r="16" fill="#ff7a62"/>
+          <circle cx="69" cy="67" r="3.5" fill="#fff"/><circle cx="70" cy="67" r="1.8" fill="#2a2418"/>
+          <path d="M40 52 L46 36 L52 52" fill="#ffd24a"/>
+        </g>
+        <!-- cannon -->
+        <g transform="translate(312,70)">
+          <ellipse cx="36" cy="100" rx="24" ry="7" fill="rgba(40,80,30,.25)"/>
+          <circle cx="16" cy="86" r="12" fill="#8a5a2b"/><circle cx="52" cy="86" r="12" fill="#8a5a2b"/>
+          <rect x="14" y="68" width="44" height="18" rx="4" fill="#c47a3a"/>
+          <rect x="26" y="36" width="16" height="38" rx="5" fill="#4a5568"/>
+        </g>
+        <!-- tiny diamonds -->
+        <g fill="#c8f4ff" stroke="#fff" stroke-width=".8" opacity=".9">
+          <path d="M50 44 L56 56 L50 52 L44 56 Z"/>
+          <path d="M330 36 L336 48 L330 44 L324 48 Z"/>
         </g>
       </svg>
     </div>
-    <h1>גיבורי הזירה</h1>
+    <div class="logo-wrap">
+      <span class="logo-badge" aria-hidden="true">◆</span>
+      <h1>גיבורי הזירה</h1>
+    </div>
     <div class="home-actions">
       <button id="btn-easy" class="btn big primary" type="button" data-testid="easy">קל</button>
       <button id="btn-hard" class="btn big alt" type="button" data-testid="hard">קשה</button>
@@ -75,7 +109,14 @@
         <div class="hp-track" aria-hidden="true"><div id="hp-enemy-fill" class="hp-fill"></div></div>
         <b id="hp-enemy-txt">0</b>
       </div>
-      <div id="timer" class="timer" data-testid="timer">2:30</div>
+      <div class="hud-center">
+        <div id="season-hud" class="season-hud" data-testid="season-hud">
+          <span id="season-icon" class="season-icon" data-testid="season-icon">☀️</span>
+          <span id="season-name" class="season-name" data-testid="season-name">קיץ</span>
+          <span id="season-count" class="season-count" data-testid="season-count">30</span>
+        </div>
+        <div id="timer" class="timer" data-testid="timer">2:30</div>
+      </div>
       <div class="hp-block player">
         <span class="hp-heart" aria-hidden="true">❤</span>
         <div class="hp-track" aria-hidden="true"><div id="hp-player-fill" class="hp-fill"></div></div>
@@ -84,6 +125,10 @@
     </header>
     <div id="arena-wrap">
       <canvas id="arena" data-testid="arena"></canvas>
+      <div id="season-banner" class="season-banner" data-testid="season-banner" aria-hidden="true">
+        <span id="banner-icon" class="banner-icon">☀️</span>
+        <span id="banner-name" class="banner-name">קיץ</span>
+      </div>
     </div>
     <footer class="hud-bottom">
       <div class="energy" title="אנרגיה">
@@ -92,26 +137,31 @@
       </div>
       <div class="unit-row" role="list">
         <button type="button" class="unit-btn" data-unit="knight" data-testid="unit-knight" aria-label="אביר">
+          <span class="season-pip" data-season="winter" title="חורף">❄️</span>
           <span class="unit-art" aria-hidden="true">🛡️</span>
           <span class="unit-name">אביר</span>
           <span class="unit-cost" data-cost="4">4</span>
         </button>
         <button type="button" class="unit-btn" data-unit="archer" data-testid="unit-archer" aria-label="קשת">
+          <span class="season-pip" data-season="fall" title="סתיו">🍂</span>
           <span class="unit-art" aria-hidden="true">🏹</span>
           <span class="unit-name">קשת</span>
           <span class="unit-cost" data-cost="3">3</span>
         </button>
         <button type="button" class="unit-btn" data-unit="dragon" data-testid="unit-dragon" aria-label="דרקון קטן">
+          <span class="season-pip" data-season="spring" title="אביב">🌸</span>
           <span class="unit-art" aria-hidden="true">🐉</span>
           <span class="unit-name">דרקון</span>
           <span class="unit-cost" data-cost="5">5</span>
         </button>
         <button type="button" class="unit-btn" data-unit="bigDragon" data-testid="unit-bigDragon" aria-label="דרקון גדול">
+          <span class="season-pip" data-season="summer" title="קיץ">☀️</span>
           <span class="unit-art" aria-hidden="true">🐲</span>
           <span class="unit-name two">דרקון<br>גדול</span>
           <span class="unit-cost" data-cost="7">7</span>
         </button>
         <button type="button" class="unit-btn" data-unit="cannon" data-testid="unit-cannon" aria-label="תותח">
+          <span class="season-pip" data-season="winter" title="חורף">❄️</span>
           <span class="unit-art" aria-hidden="true">💣</span>
           <span class="unit-name">תותח</span>
           <span class="unit-cost" data-cost="6">6</span>
@@ -121,6 +171,7 @@
   </section>
 
   <section id="screen-end" class="screen end hidden" data-testid="screen-end">
+    <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
     <div id="stars" class="stars" aria-hidden="true">
       <span class="star" data-i="0">★</span>
       <span class="star" data-i="1">★</span>

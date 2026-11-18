@@ -1,6 +1,6 @@
 /* Arena Heroes service worker — bump CACHE on every release. */
 'use strict';
-const CACHE = 'arena-heroes-v4';
+const CACHE = 'arena-heroes-v5';
 const ASSETS = [
   './',
   'index.html',
