@@ -1,5 +1,5 @@
 /* גיבורי הזירה — original cartoon arena game. Kid-safe, no external assets. */
-/* v2: castle defense, big dragon, cannon */
+/* v3: castle defense, big dragon, cannon, home guards */
 (function () {
   "use strict";
 
@@ -83,6 +83,12 @@
   const ROUND_TIME = 150;
   const STEP = 1 / 60;
   const MAX_UNITS = 24;
+  const GUARD_POSTS = [
+    { side: "player", slot: 0, x: 0.33, y: 0.835, lane: 0 },
+    { side: "player", slot: 1, x: 0.67, y: 0.835, lane: 2 },
+    { side: "ai", slot: 0, x: 0.33, y: 0.165, lane: 0 },
+    { side: "ai", slot: 1, x: 0.67, y: 0.165, lane: 2 },
+  ];
 
   const qa = /(?:\?|&)qa=1(?:&|$)/.test(location.search);
 
@@ -140,6 +146,7 @@
     heVoice: null,
     shake: 0,
     lastLane: 1,
+    guardTimers: {},
   };
 
   let audioCtx = null;
@@ -156,6 +163,8 @@
         speedMul: qa ? 1.5 : 1,
         playerCastle: { range: 0.4, dmg: 18, interval: 1.3, shotSpeed: 0.7 },
         enemyCastle: { range: 0.4, dmg: 20, interval: 1.2, shotSpeed: 0.7 },
+        playerGuard: { hp: 100, dmg: 14, range: 0.11, speed: 0.09, atk: 0.8, leash: 0.15, defendRange: 0.3, respawn: 15 },
+        enemyGuard: { hp: 100, dmg: 14, range: 0.11, speed: 0.09, atk: 0.8, leash: 0.15, defendRange: 0.3, respawn: 15 },
       };
     }
     return {
@@ -168,6 +177,8 @@
       speedMul: qa ? 1.5 : 1,
       playerCastle: { range: 0.38, dmg: 16, interval: 1.5, shotSpeed: 0.7 },
       enemyCastle: { range: 0.34, dmg: 11, interval: 1.9, shotSpeed: 0.7 },
+      playerGuard: { hp: 90, dmg: 12, range: 0.11, speed: 0.09, atk: 0.85, leash: 0.15, defendRange: 0.28, respawn: 15 },
+      enemyGuard: { hp: 50, dmg: 7, range: 0.1, speed: 0.08, atk: 1.1, leash: 0.14, defendRange: 0.24, respawn: 16 },
     };
   }
 
@@ -251,7 +262,9 @@
     state.ai = { wait: d.aiFirst, think: 0, energy: 5 };
     state.shake = 0;
     state.lastLane = 1;
+    state.guardTimers = {};
     state.settings = d;
+    for (const post of GUARD_POSTS) spawnGuard(post);
     updateUnitButtons();
     updateHud();
   }
@@ -308,13 +321,40 @@
     return Math.hypot(dx, dy);
   }
 
+  function worldDist(a, b) {
+    const pa = unitWorldPos(a);
+    const pb = unitWorldPos(b);
+    return Math.hypot(pa.x - pb.x, pa.y - pb.y);
+  }
+
+  function reach(a, b) {
+    return a.guard || b.guard ? worldDist(a, b) : dist(a, b);
+  }
+
+  function findGuardTarget(u) {
+    let best = null;
+    let bestD = 1e9;
+    for (const o of state.units) {
+      if (o.side === u.side || o.hp <= 0 || o.guard) continue;
+      const d = worldDist(u, o);
+      const inArea = distCastleToUnit(u.side, o) <= (u.defendRange || 0.26);
+      const close = d <= u.range + 0.1;
+      if ((inArea || close) && d < bestD) {
+        best = o;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
   function findTarget(u) {
+    if (u.guard) return findGuardTarget(u);
     let best = null;
     let bestD = 1e9;
     for (const o of state.units) {
       if (o.side === u.side || o.hp <= 0) continue;
-      if (!u.splash && o.lane !== u.lane) continue;
-      const d = dist(u, o);
+      if (!u.splash && o.lane !== u.lane && !o.guard) continue;
+      const d = reach(u, o);
       const aggro = u.range + (u.splash || 0) + 0.04;
       if (d < aggro && d < bestD) {
         best = o;
@@ -358,6 +398,7 @@
   }
 
   function unitWorldPos(u) {
+    if (u.wx != null) return { x: u.wx, y: u.wy != null ? u.wy : u.y };
     return { x: LANE_X[u.lane] + (u.xJitter || 0), y: u.y };
   }
 
@@ -546,10 +587,14 @@
         u.deadT = (u.deadT || 0) + dt;
         continue;
       }
+      if (u.guard) {
+        stepGuard(u, dt);
+        continue;
+      }
       u.bob += dt;
       const target = findTarget(u);
-      const inRange = target && (target.kind === "castle" ? Math.abs(u.y - target.y) <= CASTLE_RANGE + u.range * 0.15 : dist(u, target) <= u.range + (target.kind === "castle" ? 0 : 0));
-      if (target && (target.kind === "castle" ? Math.abs(u.y - target.y) <= CASTLE_RANGE : dist(u, target) <= u.range)) {
+      const hitD = target && target.kind !== "castle" ? reach(u, target) : 0;
+      if (target && (target.kind === "castle" ? Math.abs(u.y - target.y) <= CASTLE_RANGE : hitD <= u.range)) {
         u.atkCd -= dt;
         if (u.atkCd <= 0) {
           if (u.type === "cannon" || u.projectile) fireCannonUnit(u, target);
@@ -569,12 +614,18 @@
 
     stepCastles(dt);
     stepShots(dt);
+    stepGuardRespawns(dt);
 
     for (const u of state.units) {
       if (u.hp <= 0 && !u.popped) {
         u.popped = true;
-        spawnFx(LANE_X[u.lane], u.y, "pop");
+        const p = unitWorldPos(u);
+        spawnFx(p.x, p.y, "pop");
         beep(u.side === "player" ? 240 : 360, 0.08, "square", 0.03);
+        if (u.guard) {
+          const stats = u.side === "player" ? state.settings.playerGuard : state.settings.enemyGuard;
+          state.guardTimers[u.side + "-" + u.guardSlot] = stats.respawn;
+        }
       }
     }
     state.units = state.units.filter((u) => !(u.hp <= 0 && (u.deadT || 0) > 0.35));
@@ -592,10 +643,107 @@
     state.fx.push({ x, y, kind, life: 0.35, max: 0.35 });
   }
 
+  function guardKey(side, slot) {
+    return side + "-" + slot;
+  }
+
+  function spawnGuard(post) {
+    if (state.winner) return;
+    if (state.units.some((u) => u.guard && u.side === post.side && u.guardSlot === post.slot && u.hp > 0)) return;
+    const stats = post.side === "player" ? state.settings.playerGuard : state.settings.enemyGuard;
+    const u = {
+      id: state.nextId++,
+      type: "guard",
+      guard: true,
+      guardSlot: post.slot,
+      side: post.side,
+      lane: post.lane,
+      xJitter: 0,
+      wx: post.x,
+      wy: post.y,
+      y: post.y,
+      homeX: post.x,
+      homeY: post.y,
+      hp: stats.hp,
+      maxHp: stats.hp,
+      dmg: stats.dmg,
+      range: stats.range,
+      speed: stats.speed,
+      atk: stats.atk,
+      splash: 0,
+      flying: false,
+      leash: stats.leash,
+      defendRange: stats.defendRange,
+      atkCd: 0.2,
+      bob: Math.random() * 10,
+      swing: 0,
+    };
+    state.units.push(u);
+    state.guardTimers[guardKey(post.side, post.slot)] = 0;
+    spawnFx(post.x, post.y, "spark");
+  }
+
+  function stepGuard(u, dt) {
+    u.bob += dt;
+    const target = findGuardTarget(u);
+    if (target && worldDist(u, target) <= u.range) {
+      u.atkCd -= dt;
+      if (u.atkCd <= 0) {
+        attack(u, target);
+        u.atkCd = u.atk;
+        u.swing = 1;
+      }
+    } else {
+      let tx = u.homeX;
+      let ty = u.homeY;
+      if (target) {
+        const p = unitWorldPos(target);
+        tx = p.x;
+        ty = p.y;
+      }
+      const dx = tx - u.wx;
+      const dy = ty - u.wy;
+      const dist0 = Math.hypot(dx, dy);
+      if (dist0 > 0.006) {
+        const step = u.speed * (state.settings.speedMul || 1) * dt;
+        let nx = u.wx + (dx / dist0) * Math.min(step, dist0);
+        let ny = u.wy + (dy / dist0) * Math.min(step, dist0);
+        const hx = nx - u.homeX;
+        const hy = ny - u.homeY;
+        const hd = Math.hypot(hx, hy);
+        const leash = u.leash || 0.14;
+        if (hd > leash) {
+          nx = u.homeX + (hx / hd) * leash;
+          ny = u.homeY + (hy / hd) * leash;
+        }
+        u.wx = nx;
+        u.wy = ny;
+        u.y = u.wy;
+        u.lane = u.wx < 1 / 3 ? 0 : u.wx < 2 / 3 ? 1 : 2;
+      }
+    }
+    if (u.swing > 0) u.swing = Math.max(0, u.swing - dt * 4);
+  }
+
+  function stepGuardRespawns(dt) {
+    if (!state.settings) return;
+    for (const post of GUARD_POSTS) {
+      const key = guardKey(post.side, post.slot);
+      const alive = state.units.some((u) => u.guard && u.side === post.side && u.guardSlot === post.slot && (u.hp > 0 || (u.deadT || 0) <= 0.35));
+      if (alive) continue;
+      if (!(state.guardTimers[key] > 0)) {
+        const stats = post.side === "player" ? state.settings.playerGuard : state.settings.enemyGuard;
+        state.guardTimers[key] = stats.respawn;
+      }
+      state.guardTimers[key] -= dt;
+      if (state.guardTimers[key] <= 0) spawnGuard(post);
+    }
+  }
+
   function canDeploy(side, typeId) {
     const typ = UNIT_TYPES[typeId];
     if (!typ) return false;
-    if (state.units.length >= MAX_UNITS) return false;
+    if (state.units.filter((u) => !u.guard).length >= MAX_UNITS) return false;
     const pool = side === "player" ? state.energy : state.ai.energy;
     return pool + 1e-6 >= typ.cost;
   }
@@ -654,7 +802,7 @@
 
     let typ;
     if (state.difficulty === "hard") {
-      const threats = state.units.filter((u) => u.side === "player" && u.hp > 0);
+      const threats = state.units.filter((u) => u.side === "player" && u.hp > 0 && !u.guard);
       const kinds = threats.reduce((m, u) => ((m[u.type] = (m[u.type] || 0) + 1), m), {});
       if ((kinds.knight || 0) >= (kinds.archer || 0) && (kinds.knight || 0) >= (kinds.dragon || 0) && ai.energy >= UNIT_TYPES.dragon.cost) typ = UNIT_TYPES.dragon;
       else if ((kinds.dragon || 0) > 0 && ai.energy >= UNIT_TYPES.archer.cost) typ = UNIT_TYPES.archer;
@@ -1191,8 +1339,64 @@
     c.restore();
   }
 
+  function drawGuard(c, s0, flip, swing, bob, side) {
+    const s = s0 * 0.78;
+    const tunic = side === "player" ? "#3d7cff" : "#ff6a3d";
+    const tunicDark = side === "player" ? "#2a5fd0" : "#d44a20";
+    c.save();
+    c.scale(flip, 1);
+    c.translate(0, Math.sin(bob * 8) * s * 0.03);
+    const poke = Math.sin(swing * Math.PI) * s * 0.35;
+    c.fillStyle = "rgba(40,80,30,.28)";
+    c.beginPath();
+    c.ellipse(0, s * 0.62, s * 0.32, s * 0.1, 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = tunicDark;
+    roundRect(c, -s * 0.16, s * 0.22, s * 0.13, s * 0.34, 5);
+    c.fill();
+    roundRect(c, s * 0.03, s * 0.22, s * 0.13, s * 0.34, 5);
+    c.fill();
+    c.fillStyle = tunic;
+    roundRect(c, -s * 0.22, -s * 0.02, s * 0.44, s * 0.36, 8);
+    c.fill();
+    // spear
+    c.save();
+    c.translate(s * 0.28, s * 0.02);
+    c.rotate(-0.35 - (swing ? 0.4 : 0));
+    c.fillStyle = "#8a5a2b";
+    roundRect(c, -s * 0.04, -s * 0.55 + poke * 0.05, s * 0.08, s * 0.75, 2);
+    c.fill();
+    c.fillStyle = "#d8dce8";
+    c.beginPath();
+    c.moveTo(0, -s * 0.72 + poke * 0.05);
+    c.lineTo(s * 0.1, -s * 0.5);
+    c.lineTo(-s * 0.1, -s * 0.5);
+    c.closePath();
+    c.fill();
+    c.restore();
+    // head + cap
+    c.fillStyle = "#f3c79a";
+    c.beginPath();
+    c.arc(0, -s * 0.22, s * 0.2, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = tunicDark;
+    c.beginPath();
+    c.arc(0, -s * 0.26, s * 0.2, Math.PI, 0);
+    c.fill();
+    c.fillStyle = "#ffd24a";
+    roundRect(c, -s * 0.2, -s * 0.3, s * 0.4, s * 0.08, 3);
+    c.fill();
+    c.fillStyle = "#2a2418";
+    c.beginPath();
+    c.arc(-s * 0.06, -s * 0.2, s * 0.03, 0, Math.PI * 2);
+    c.arc(s * 0.06, -s * 0.2, s * 0.03, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+
   function drawUnit(c, u) {
-    const p = toPx(LANE_X[u.lane] + u.xJitter, u.y);
+    const w = unitWorldPos(u);
+    const p = toPx(w.x, w.y);
     const s = unitScale();
     const flip = u.side === "player" ? 1 : -1;
     c.save();
@@ -1202,10 +1406,11 @@
     else if (u.type === "archer") drawArcher(c, s, flip, u.swing, u.bob);
     else if (u.type === "bigDragon") drawBigDragon(c, s, flip, u.swing, u.bob);
     else if (u.type === "cannon") drawCannon(c, s, flip, u.swing, u.bob);
+    else if (u.type === "guard") drawGuard(c, s, flip, u.swing, u.bob, u.side);
     else drawDragon(c, s, flip, u.swing, u.bob);
     if (u.hp > 0 && u.hp < u.maxHp) {
       const bw = s * (u.type === "bigDragon" ? 1 : 0.8);
-      const barY = u.type === "bigDragon" ? -s * 1.35 : -s * 1.05;
+      const barY = u.type === "bigDragon" ? -s * 1.35 : u.type === "guard" ? -s * 0.95 : -s * 1.05;
       c.fillStyle = "rgba(0,0,0,.35)";
       roundRect(c, -bw / 2, barY, bw, s * 0.12, 4);
       c.fill();
@@ -1520,8 +1725,13 @@
         side: u.side,
         lane: u.lane,
         y: u.y,
+        x: u.wx != null ? u.wx : LANE_X[u.lane] + (u.xJitter || 0),
         hp: u.hp,
+        maxHp: u.maxHp,
+        guard: !!u.guard,
+        swing: u.swing || 0,
       })),
+      guardTimers: { ...state.guardTimers },
       winner: state.winner,
       stars: state.stars,
       aiEnergy: state.ai.energy,
